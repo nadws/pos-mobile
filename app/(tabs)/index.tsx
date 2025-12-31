@@ -121,7 +121,7 @@ export default function DashboardScreen() {
   // --- NAVIGASI MENU ---
   const menuItems = [
     { title: 'Dapur', desc: 'Monitor Masakan', icon: 'chef-hat', color: '#F59E0B', route: '/kitchen' },
-    { title: 'Gudang', desc: 'Ambil Barang', icon: 'warehouse', color: '#8B5CF6', route: '/warehouse' },
+    // { title: 'Gudang', desc: 'Ambil Barang', icon: 'warehouse', color: '#8B5CF6', route: '/warehouse' },
     { title: 'Pesanan', desc: 'Riwayat Transaksi', icon: 'receipt', color: '#10B981', route: '/orders' },
     { title: 'Laporan', desc: 'Statistik Penjualan', icon: 'chart-bar', color: '#EC4899', route: '/reports' },
     { title: 'Closing', desc: 'Laporan Akhir Shift', icon: 'file-document-outline', color: '#6366F1', route: '/closing' },
