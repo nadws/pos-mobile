@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "pos-mobile",
+    "name": "POS Soondobu",
     "slug": "pos-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,9 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.soondobu.posmobile"
     },
     "android": {
+      "package": "com.soondobu.posmobile",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -43,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0f2dc23a-8f38-4d4e-b916-5c6d9715279a"
+      }
     }
   }
 }
