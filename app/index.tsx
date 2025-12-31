@@ -1,18 +1,58 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator, StatusBar,
+  StyleSheet,
+  Text, TouchableOpacity,
+  View
+} from 'react-native';
 
-const { width } = Dimensions.get('window');
-
-export default function WelcomeScreen() {
+export default function IndexScreen() {
   const router = useRouter();
+  const [loadingCheck, setLoadingCheck] = useState(true);
 
+  // --- 1. BAGIAN LOGIKA (SATPAM) ---
+  useEffect(() => {
+    checkStatus();
+  }, []);
+
+  const checkStatus = async () => {
+    try {
+      // Cek apakah ada data tersimpan di HP
+      const token = await AsyncStorage.getItem("pos_token");
+      const storeSlug = await AsyncStorage.getItem("pos_store_slug");
+
+      if (token) {
+        // KASUS A: Sudah Login -> Langsung masuk Dashboard
+        router.replace('/(tabs)');
+      } else if (storeSlug) {
+        // KASUS B: Sudah Scan Toko, tapi Logout -> Masuk Pilih User
+        router.replace('/select-user');
+      } else {
+        // KASUS C: Belum ada apa-apa -> Tampilkan Halaman Setup (UI Kamu)
+        setLoadingCheck(false);
+      }
+    } catch (e) {
+      setLoadingCheck(false);
+    }
+  };
+
+  // Tampilan Loading saat "Satpam" bekerja
+  if (loadingCheck) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1E40AF" />
+      </View>
+    );
+  }
+
+  // --- 2. BAGIAN TAMPILAN (UI KAMU YANG KEREN) ---
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar barStyle="light-content" />
       
       {/* Bagian Atas: Gambar / Ilustrasi */}
       <LinearGradient
@@ -48,7 +88,8 @@ export default function WelcomeScreen() {
         <TouchableOpacity 
           style={styles.button}
           activeOpacity={0.8}
-          onPress={() => router.push('/scan-setup')} // Pindah ke kamera saat ditekan
+          // Tombol ini akan membuka kamera
+          onPress={() => router.push('/scan-setup')} 
         >
           <MaterialCommunityIcons name="qrcode-scan" size={24} color="white" style={{marginRight: 10}} />
           <Text style={styles.buttonText}>Scan QR Sekarang</Text>
@@ -59,6 +100,7 @@ export default function WelcomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' },
   container: { flex: 1, backgroundColor: 'white' },
   header: {
     height: '45%',

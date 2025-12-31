@@ -5,29 +5,22 @@ import React from 'react';
 export default function RootLayout() {
   return (
     <>
-      {/* Status Bar Global: 
-        Kita set style="light" (text putih) dan background biru #2563EB
-        agar menyatu dengan header aplikasi Kasir kita.
-      */}
-      <StatusBar style="light" backgroundColor="#2563EB" />
+      {/* Status Bar Global: Teks putih, Background Biru */}
+      <StatusBar style="light" backgroundColor="#1E40AF" />
 
-      {/* Stack Navigator: 
-        Daftar halaman yang didaftarkan dalam aplikasi.
-        Logic "redirect" sudah dihapus dari sini agar tidak bentrok dengan index.tsx.
-      */}
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         
-        {/* 1. PINTU GERBANG (Logic Cek Login & Form Sambung Toko) */}
+        {/* 1. index: Pintu Masuk Utama (Satpam) */}
         <Stack.Screen name="index" />
 
-        {/* 2. Halaman Pilih Kasir (Asep, Budi, dll) */}
-        <Stack.Screen name="select-user" />
+        {/* 2. Halaman Scan QR (Yang baru mau dibuat) */}
+        <Stack.Screen name="scan-setup" />
 
-        {/* 3. Halaman Input PIN */}
+        {/* 3. Halaman Auth Lainnya */}
+        <Stack.Screen name="select-user" />
         <Stack.Screen name="pin-auth" />
 
-        {/* 4. Dashboard Utama (Menu, Transaksi, Laporan) */}
-        {/* animation: 'fade' supaya transisi masuk ke dashboard lebih halus */}
+        {/* 4. Dashboard */}
         <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
 
       </Stack>
