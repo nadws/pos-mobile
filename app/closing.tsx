@@ -1,15 +1,13 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Linking,
-  Platform,
+  Alert, SafeAreaView,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -20,12 +18,10 @@ import {
 export default function ClosingScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
-  const [uangAwal, setUangAwal] = useState('0');
-  
-  // State untuk identitas toko dan kasir
-  const [storeName, setStoreName] = useState("Toko");
-  const [userName, setUserName] = useState("Kasir");
+  const [submitting, setSubmitting] = useState(false);
+  const [report, setReport] = useState<any>(null);
+  const [actualCash, setActualCash] = useState("");
+  const [startCash, setStartCash] = useState(0);
 
   useEffect(() => {
     fetchClosingData();
@@ -35,203 +31,241 @@ export default function ClosingScreen() {
     try {
       const slug = await AsyncStorage.getItem("pos_store_slug");
       const token = await AsyncStorage.getItem("pos_token");
-      
-      // Ambil data store dan user dari storage untuk nama di laporan WA
-      const storeData = await AsyncStorage.getItem("pos_store");
-      const userData = await AsyncStorage.getItem("pos_user");
+      const apiUrl = await AsyncStorage.getItem("pos_api_url");
 
-      if (storeData) {
-        const parsedStore = JSON.parse(storeData);
-        setStoreName(parsedStore.name || "Toko");
-      }
-      if (userData) {
-        const parsedUser = JSON.parse(userData);
-        setUserName(parsedUser.name || "Kasir");
-      }
-
-      const response = await axios.get(`https://pos.soondobu.com/api/pos/${slug}/closing`, {
-        headers: { Authorization: `Bearer ${token}` }
+      // 1. Ambil Data Register (untuk tahu modal awal)
+      const statusRes = await axios.get(`${apiUrl}/pos/${slug}/status`, {
+         headers: { Authorization: `Bearer ${token}` }
       });
-      setData(response.data.data);
+      if (statusRes.data.is_open) {
+          setStartCash(parseFloat(statusRes.data.data.start_cash));
+      }
+
+      // 2. Ambil Laporan Penjualan Hari Ini
+      const reportRes = await axios.get(`${apiUrl}/pos/${slug}/closing`, {
+         headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setReport(reportRes.data.data);
     } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Gagal mengambil data closing");
+      Alert.alert("Error", "Gagal mengambil data closing.");
+      router.back();
     } finally {
       setLoading(false);
     }
   };
 
-  const formatRp = (num: number) => "Rp " + (num || 0).toLocaleString("id-ID");
-
-  // Hitung total uang yang harus ada di laci (Cash Penjualan + Uang Awal)
-  const totalDiLaci = (data?.cash_total || 0) + parseInt(uangAwal || '0');
-
-  const handleKonfirmasiTutupToko = () => {
-    // 1. Validasi input uang awal
-    if (!uangAwal || uangAwal === '') {
-      Alert.alert("Perhatian", "Mohon isi uang modal awal laci terlebih dahulu (isi 0 jika tidak ada).");
-      return;
+  const handleCloseStore = async () => {
+    if (!actualCash) {
+        Alert.alert("Perhatian", "Harap masukkan jumlah uang tunai yang ada di laci.");
+        return;
     }
 
-    // 2. Format Pesan WhatsApp
-    const pesan = 
-      `*LAPORAN TUTUP KASIR - ${data?.date}*\n` +
-      `------------------------------------------\n` +
-      `🏪 *Toko:* ${storeName}\n` +
-      `👤 *Kasir:* ${userName}\n\n` +
-      `💰 *TOTAL PENJUALAN:* ${formatRp(data?.grand_total)}\n` +
-      `💵 Cash: ${formatRp(data?.cash_total)}\n` +
-      `📱 QRIS: ${formatRp(data?.qris_total)}\n` +
-      `------------------------------------------\n` +
-      `🏧 *RINCIAN KAS LACI:*\n` +
-      `Modal Awal: ${formatRp(parseInt(uangAwal))}\n` +
-      `Hasil Cash: ${formatRp(data?.cash_total)}\n` +
-      `*TOTAL FISIK LACI: ${formatRp(totalDiLaci)}*\n` +
-      `------------------------------------------\n` +
-      `✅ Pesanan Berhasil: ${data?.total_orders}\n` +
-      `❌ Pesanan Dibatalkan: ${data?.cancelled_orders}\n\n` +
-      `_Laporan dikirim otomatis dari sistem POS._`;
-
-    // 3. Nomor WhatsApp Owner (Ganti dengan nomor owner asli)
-    const nomorOwner = "6285751609104"; 
-    const url = `whatsapp://send?phone=${nomorOwner}&text=${encodeURIComponent(pesan)}`;
-
-    // 4. Munculkan Dialog Konfirmasi
     Alert.alert(
-      "Konfirmasi Tutup Toko",
-      `Pastikan uang fisik di laci sesuai: ${formatRp(totalDiLaci)}`,
-      [
-        { text: "Batal", style: "cancel" },
-        { 
-          text: "Tutup & Kirim WA", 
-          onPress: () => {
-            Linking.openURL(url).catch(() => {
-              Alert.alert("Error", "Pastikan WhatsApp terinstal di HP kamu.");
-            });
-            // Opsional: Kembali ke dashboard atau logout
-            router.replace('/(tabs)');
-          } 
-        }
-      ]
+        "Konfirmasi Closing",
+        "Apakah Anda yakin ingin menutup toko/shift ini? Anda tidak bisa membatalkan aksi ini.",
+        [
+            { text: "Batal", style: "cancel" },
+            { 
+                text: "TUTUP TOKO", 
+                style: "destructive",
+                onPress: processClosing
+            }
+        ]
     );
   };
 
+  const processClosing = async () => {
+    console.log("Memulai proses closing..."); // Cek di terminal
+    setSubmitting(true);
+    
+    try {
+        const slug = await AsyncStorage.getItem("pos_store_slug");
+        const token = await AsyncStorage.getItem("pos_token");
+        const apiUrl = await AsyncStorage.getItem("pos_api_url");
+        
+        // Hapus titik ribuan agar jadi integer
+        const cashValue = parseInt(actualCash.replace(/\D/g, ''));
+        
+        console.log("Mengirim data ke:", `${apiUrl}/pos/${slug}/close-store`);
+        console.log("Data:", { end_cash: cashValue });
+
+        const response = await axios.post(`${apiUrl}/pos/${slug}/close-store`, 
+            { end_cash: cashValue },
+            { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        console.log("Respon Sukses:", response.data);
+
+        Alert.alert("Sukses", "Shift berhasil ditutup. Sampai jumpa!", [
+            { text: "OK", onPress: async () => {
+                await AsyncStorage.removeItem("pos_token");
+                await AsyncStorage.removeItem("pos_user_name");
+                router.replace('/select-user');
+            }}
+        ]);
+    } catch (error: any) {
+        // --- INI BAGIAN PENTINGNYA ---
+        console.error("ERROR CLOSING:", error);
+        
+        if (error.response) {
+            // Error dari Server (Laravel)
+            console.error("Server Response:", error.response.data);
+            Alert.alert("Gagal Server", error.response.data.message || "Terjadi kesalahan di server");
+        } else if (error.request) {
+            // Tidak ada respon (Koneksi putus)
+            Alert.alert("Gagal Koneksi", "Tidak dapat menghubungi server. Cek internet.");
+        } else {
+            // Error kodingan JS
+            Alert.alert("Gagal Aplikasi", error.message);
+        }
+    } finally {
+        setSubmitting(false);
+    }
+};
+
+  const formatRp = (num: number) => "Rp " + num.toLocaleString("id-ID");
+
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#2563EB" /></View>;
 
+  // Hitung Total yang Seharusnya Ada di Laci
+  // Rumus: Modal Awal + Penjualan Tunai
+  const systemCash = startCash + (report?.cash_total || 0);
+  const inputCash = parseInt(actualCash.replace(/\D/g, '')) || 0;
+  const difference = inputCash - systemCash;
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#2563EB" translucent />
-
-      {/* HEADER BIRU MELENGKUNG */}
-      <View style={styles.headerContainer}>
-        <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+    <SafeAreaView style={styles.container}>
+      {/* HEADER */}
+      <LinearGradient colors={['#4F46E5', '#6366F1']} style={styles.header}>
+         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.navTitle}>Tutup Kasir / Closing</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.headerInfo}>
-          <Text style={styles.labelSub}>Laporan Hari Ini</Text>
-          <Text style={styles.labelMain}>{data?.date}</Text>
-        </View>
-      </View>
+         </TouchableOpacity>
+         <Text style={styles.headerTitle}>Laporan Closing</Text>
+         <View style={{width: 30}} />
+      </LinearGradient>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
-        
-        {/* INPUT UANG AWAL */}
-        <View style={styles.inputCard}>
-          <View style={styles.inputHeader}>
-            <MaterialCommunityIcons name="wallet" size={20} color="#2563EB" />
-            <Text style={styles.inputLabel}>Uang Modal Awal (Laci)</Text>
-          </View>
-          <TextInput
-            style={styles.textInput}
-            keyboardType="numeric"
-            value={uangAwal}
-            onChangeText={(val) => setUangAwal(val.replace(/[^0-9]/g, ''))}
-            placeholder="0"
-          />
-          <Text style={styles.inputHint}>* Uang kembalian yang ada di laci saat toko buka.</Text>
-        </View>
-
-        {/* RINGKASAN OMZET */}
-        <View style={styles.cardMain}>
-          <Text style={styles.cardLabel}>Total Penjualan Hari Ini</Text>
-          <Text style={styles.grandTotalText}>{formatRp(data?.grand_total)}</Text>
-          
-          <View style={styles.divider} />
-          
-          <View style={styles.row}>
-            <Text style={styles.methodLabel}>Cash (Penjualan)</Text>
-            <Text style={styles.methodValue}>{formatRp(data?.cash_total)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.methodLabel}>QRIS (Digital)</Text>
-            <Text style={styles.methodValue}>{formatRp(data?.qris_total)}</Text>
-          </View>
-
-          <View style={[styles.row, styles.highlightRow]}>
-            <Text style={[styles.methodLabel, {color: '#111827', fontWeight: 'bold'}]}>TOTAL DI LACI</Text>
-            <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.totalLaciValue}>{formatRp(totalDiLaci)}</Text>
-                <Text style={{ fontSize: 10, color: '#9CA3AF' }}>(Cash + Modal)</Text>
+      <ScrollView contentContainerStyle={styles.content}>
+         
+         {/* RINGKASAN PENJUALAN */}
+         <View style={styles.card}>
+            <Text style={styles.cardTitle}>Ringkasan Penjualan</Text>
+            <View style={styles.row}>
+                <Text style={styles.label}>Total Order Selesai</Text>
+                <Text style={styles.value}>{report?.total_orders}</Text>
             </View>
-          </View>
-        </View>
+            <View style={styles.row}>
+                <Text style={styles.label}>Order Dibatalkan</Text>
+                <Text style={[styles.value, {color: '#EF4444'}]}>{report?.cancelled_orders}</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.row}>
+                <Text style={styles.label}>Penjualan Tunai</Text>
+                <Text style={styles.value}>{formatRp(report?.cash_total)}</Text>
+            </View>
+            <View style={styles.row}>
+                <Text style={styles.label}>Penjualan QRIS</Text>
+                <Text style={styles.value}>{formatRp(report?.qris_total)}</Text>
+            </View>
+            <View style={[styles.row, {marginTop: 10}]}>
+                <Text style={styles.totalLabel}>Grand Total Omzet</Text>
+                <Text style={styles.totalValue}>{formatRp(report?.grand_total)}</Text>
+            </View>
+         </View>
 
-        {/* TOMBOL KONFIRMASI */}
-        <TouchableOpacity 
-          style={styles.btnFinish} 
-          onPress={handleKonfirmasiTutupToko}
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="whatsapp" size={24} color="white" />
-          <Text style={styles.btnText}>Konfirmasi & Kirim WA</Text>
-        </TouchableOpacity>
-        
-        <Text style={styles.footerNote}>Pastikan uang fisik di laci sesuai dengan perhitungan di atas sebelum konfirmasi.</Text>
+         {/* REKONSILIASI KAS (CASH RECONCILIATION) */}
+         <View style={styles.card}>
+            <Text style={styles.cardTitle}>Rekonsiliasi Kas (Laci)</Text>
+            
+            <View style={styles.reconRow}>
+                <Text style={styles.reconLabel}>Modal Awal</Text>
+                <Text style={styles.reconValue}>{formatRp(startCash)}</Text>
+            </View>
+            <View style={styles.reconRow}>
+                <Text style={styles.reconLabel}>(+) Tunai Masuk</Text>
+                <Text style={styles.reconValue}>{formatRp(report?.cash_total)}</Text>
+            </View>
+            <View style={[styles.reconRow, {borderTopWidth: 1, borderColor: '#E5E7EB', paddingTop: 8, marginTop: 5}]}>
+                <Text style={[styles.reconLabel, {fontWeight: 'bold'}]}>Seharusnya Ada</Text>
+                <Text style={[styles.reconValue, {color: '#2563EB'}]}>{formatRp(systemCash)}</Text>
+            </View>
+
+            {/* INPUT UANG AKTUAL */}
+            <View style={styles.inputSection}>
+                <Text style={styles.inputLabel}>Masukkan Total Uang Fisik di Laci</Text>
+                <View style={styles.inputWrapper}>
+                    <Text style={styles.prefix}>Rp</Text>
+                    <TextInput 
+                        style={styles.input}
+                        keyboardType="number-pad"
+                        placeholder="0"
+                        value={actualCash}
+                        onChangeText={(text) => {
+                            const num = text.replace(/\D/g, '');
+                            setActualCash(Number(num).toLocaleString('id-ID'));
+                        }}
+                    />
+                </View>
+            </View>
+
+            {/* SELISIH */}
+            {actualCash !== "" && (
+                <View style={[styles.diffBox, difference < 0 ? styles.diffError : difference > 0 ? styles.diffSuccess : styles.diffNeutral]}>
+                    <Text style={styles.diffLabel}>{difference === 0 ? "Klop / Seimbang" : difference < 0 ? "Selisih Kurang (Minus)" : "Selisih Lebih (Plus)"}</Text>
+                    <Text style={styles.diffValue}>{formatRp(difference)}</Text>
+                </View>
+            )}
+         </View>
+
+         <TouchableOpacity 
+            style={[styles.closeBtn, submitting && {opacity: 0.7}]}
+            onPress={handleCloseStore}
+            disabled={submitting}
+         >
+            {submitting ? <ActivityIndicator color="white" /> : <Text style={styles.closeBtnText}>TUTUP SHIFT SEKARANG</Text>}
+         </TouchableOpacity>
+
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  container: { flex: 1, backgroundColor: '#F3F4F6' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerContainer: { 
-    backgroundColor: '#2563EB', 
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight! + 10 : 50, 
-    paddingBottom: 40, 
-    paddingHorizontal: 20, 
-    borderBottomLeftRadius: 30, 
-    borderBottomRightRadius: 30 
-  },
-  navBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  navTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
-  iconBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 10 },
-  headerInfo: { marginTop: 20 },
-  labelSub: { color: '#BFDBFE', fontSize: 14 },
-  labelMain: { color: 'white', fontSize: 24, fontWeight: 'bold' },
-  content: { flex: 1, marginTop: -30, paddingHorizontal: 20 },
   
-  inputCard: { backgroundColor: 'white', borderRadius: 20, padding: 20, marginBottom: 15, elevation: 3, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5 },
-  inputHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  inputLabel: { fontSize: 14, fontWeight: 'bold', color: '#374151' },
-  textInput: { backgroundColor: '#F3F4F6', borderRadius: 12, padding: 12, fontSize: 18, fontWeight: 'bold', color: '#111827' },
-  inputHint: { fontSize: 11, color: '#9CA3AF', marginTop: 8 },
+  header: { padding: 20, paddingTop: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+  backBtn: { padding: 5 },
 
-  cardMain: { backgroundColor: 'white', borderRadius: 20, padding: 24, elevation: 4, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
-  cardLabel: { color: '#6B7280', fontSize: 13, textAlign: 'center', marginBottom: 5 },
-  grandTotalText: { color: '#111827', fontSize: 32, fontWeight: 'bold', textAlign: 'center' },
-  divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 20 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  methodLabel: { fontSize: 14, color: '#6B7280' },
-  methodValue: { fontSize: 15, fontWeight: '600', color: '#111827' },
-  highlightRow: { marginTop: 10, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#F3F4F6' },
-  totalLaciValue: { fontSize: 22, fontWeight: 'bold', color: '#059669' },
+  content: { padding: 20 },
+  card: { backgroundColor: 'white', borderRadius: 16, padding: 20, marginBottom: 20, elevation: 2 },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1F2937', marginBottom: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', paddingBottom: 10 },
+  
+  row: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  label: { color: '#6B7280', fontSize: 14 },
+  value: { fontWeight: '600', color: '#1F2937' },
+  divider: { height: 1, backgroundColor: '#E5E7EB', marginVertical: 10 },
+  totalLabel: { fontWeight: 'bold', fontSize: 16, color: '#1F2937' },
+  totalValue: { fontWeight: 'bold', fontSize: 18, color: '#2563EB' },
 
-  btnFinish: { backgroundColor: '#25D366', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 18, borderRadius: 18, marginTop: 25, gap: 12, elevation: 4 },
-  btnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  footerNote: { textAlign: 'center', color: '#9CA3AF', fontSize: 12, marginTop: 15, paddingHorizontal: 20 }
+  reconRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  reconLabel: { color: '#4B5563' },
+  reconValue: { fontWeight: 'bold' },
+
+  inputSection: { marginTop: 20, backgroundColor: '#F9FAFB', padding: 15, borderRadius: 12 },
+  inputLabel: { fontSize: 12, color: '#6B7280', marginBottom: 8 },
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderBottomWidth: 1, borderColor: '#D1D5DB' },
+  prefix: { fontSize: 18, fontWeight: 'bold', color: '#9CA3AF', marginRight: 10 },
+  input: { flex: 1, fontSize: 24, fontWeight: 'bold', color: '#1F2937' },
+
+  diffBox: { marginTop: 15, padding: 12, borderRadius: 8, alignItems: 'center' },
+  diffError: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECaca' },
+  diffSuccess: { backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0' },
+  diffNeutral: { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#E5E7EB' },
+  diffLabel: { fontSize: 12, fontWeight: 'bold', color: '#374151' },
+  diffValue: { fontSize: 18, fontWeight: 'bold', marginTop: 2, color: '#1F2937' },
+
+  closeBtn: { backgroundColor: '#EF4444', padding: 18, borderRadius: 12, alignItems: 'center', elevation: 3, marginBottom: 30 },
+  closeBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 }
 });
