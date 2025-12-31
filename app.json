@@ -13,7 +13,7 @@
       "bundleIdentifier": "com.soondobu.posmobile"
     },
     "android": {
-      "package": "com.soondobu.posmobile",
+      "package": "uwais.posmobile",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
