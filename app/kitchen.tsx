@@ -51,7 +51,7 @@ export default function KitchenScreen() {
     try {
       const { sound } = await Audio.Sound.createAsync(
         { uri: NOTIF_URL },
-        { shouldPlay: true, volume: 1.0 }
+        { shouldPlay: true, volume: 1.0 },
       );
       // Lepas memori setelah suara selesai putar
       sound.setOnPlaybackStatusUpdate((status) => {
@@ -75,10 +75,10 @@ export default function KitchenScreen() {
 
       const response = await axios.get(
         `https://pos.soondobu.com/api/pos/${slug}/kitchen`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
 
-      const newOrders = response.data.orders || [];
+      const newOrders = response.data.data || [];
 
       // LOGIKA NOTIFIKASI:
       // Bunyi jika pesanan bertambah dibanding pengecekan terakhir
@@ -115,15 +115,32 @@ export default function KitchenScreen() {
   const handleMarkItemReady = async (itemId: number) => {
     try {
       const token = await AsyncStorage.getItem("pos_token");
+
+      // Simpan URL ke variabel biar gampang dicek
+      const url = `https://pos.soondobu.com/api/order-items/${itemId}/ready`;
+      console.log("Menembak URL:", url); // Cek apakah ID-nya undefined?
+
       await axios.post(
-        `https://pos.soondobu.com/api/order-items/${itemId}/ready`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        url,
+        {}, // Body kosong
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-      // Refresh data setelah update status
+
       fetchOrders(true);
-    } catch (error) {
-      console.error("Gagal update status item");
+    } catch (error: any) {
+      // INI BAGIAN PENTING:
+      // Cek respon dari server (Laravel)
+      if (error.response) {
+        console.error("Server Error:", error.response.status); // Contoh: 404, 500, 405
+        console.error("Pesan Server:", error.response.data); // Pesan error dari Laravel
+      } else {
+        console.error("Network/Code Error:", error.message);
+      }
+
+      // Tetap munculkan alert ke user (opsional)
+      alert(
+        "Gagal update: " + (error.response?.data?.message || "Cek koneksi"),
+      );
     }
   };
 
@@ -151,7 +168,7 @@ export default function KitchenScreen() {
           >
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.navTitle}>Pesanan</Text>
+          <Text style={styles.navTitle}>Dapur Soondobu</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -183,7 +200,7 @@ export default function KitchenScreen() {
                 <MaterialCommunityIcons
                   name="chef-hat"
                   size={60}
-                  color="#2563EB"
+                  color="#E5E7EB"
                 />
                 <Text style={styles.emptyTitle}>Belum ada pesanan masuk</Text>
               </View>
