@@ -1,63 +1,82 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+import React from "react";
+import { StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
-        headerShown: false, // Kita buat header sendiri nanti di tiap halaman
-        tabBarActiveTintColor: '#2563EB', // Warna Biru saat aktif
-        tabBarInactiveTintColor: '#9CA3AF', // Warna Abu saat tidak aktif
+        headerShown: false,
+        tabBarActiveTintColor: "#2563EB",
+        tabBarInactiveTintColor: "#9CA3AF",
+        tabBarHideOnKeyboard: true,
+
         tabBarStyle: {
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom,
           paddingTop: 8,
-          backgroundColor: 'white',
+          backgroundColor: "white",
           borderTopWidth: 1,
-          borderTopColor: '#E5E7EB',
-          elevation: 5,
+          borderTopColor: "#E5E7EB",
+          elevation: 8,
         },
+
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '600',
+          fontWeight: "600",
         },
       }}
     >
-      {/* 1. TAB DASHBOARD */}
+      {/* TAB BERANDA */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Beranda',
+          title: "Beranda",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="view-dashboard-outline" size={size} color={color} />
+            <MaterialCommunityIcons
+              name="view-dashboard-outline"
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
 
-      {/* 2. TAB KASIR (POS) */}
+      {/* TAB POS (FLOATING BUTTON) */}
       <Tabs.Screen
         name="pos"
         options={{
-          title: 'Kasir',
-          tabBarIcon: ({ color, size }) => (
-            // Kita buat ikon Kasir lebih menonjol (Floating Button effect)
-            <View style={styles.posButton}>
-               <MaterialCommunityIcons name="monitor-dashboard" size={28} color="white" />
+          title: "Kasir",
+          tabBarLabel: "",
+          tabBarIcon: () => (
+            <View
+              style={[styles.posButton, { marginBottom: 20 + insets.bottom }]}
+            >
+              <MaterialCommunityIcons
+                name="monitor-dashboard"
+                size={28}
+                color="white"
+              />
             </View>
           ),
-          tabBarLabel: '', // Kosongkan label biar ikonnya di tengah sendirian
         }}
       />
 
-      {/* 3. TAB SETTING */}
+      {/* TAB AKUN */}
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Akun',
+          title: "Akun",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account-circle-outline" size={size} color={color} />
+            <MaterialCommunityIcons
+              name="account-circle-outline"
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
@@ -67,17 +86,16 @@ export default function TabLayout() {
 
 const styles = StyleSheet.create({
   posButton: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#2563EB',
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20, // Biar agak naik ke atas (Floating)
-    elevation: 4,
-    shadowColor: '#2563EB',
+    width: 56,
+    height: 56,
+    backgroundColor: "#2563EB",
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 6,
+    shadowColor: "#2563EB",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
     shadowRadius: 4,
-  }
+  },
 });

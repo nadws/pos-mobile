@@ -1,29 +1,33 @@
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import React from 'react';
+import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function RootLayout() {
   return (
-    <>
-      {/* Status Bar Global: Teks putih, Background Biru */}
+    <SafeAreaProvider>
+      {/* Status Bar Global */}
       <StatusBar style="light" backgroundColor="#1E40AF" />
 
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-        
-        {/* 1. index: Pintu Masuk Utama (Satpam) */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: "slide_from_right",
+        }}
+      >
+        {/* 1. Pintu Masuk */}
         <Stack.Screen name="index" />
 
-        {/* 2. Halaman Scan QR (Yang baru mau dibuat) */}
+        {/* 2. Setup / Scan */}
         <Stack.Screen name="scan-setup" />
 
-        {/* 3. Halaman Auth Lainnya */}
+        {/* 3. Auth */}
         <Stack.Screen name="select-user" />
         <Stack.Screen name="pin-auth" />
 
-        {/* 4. Dashboard */}
-        <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
-
+        {/* 4. Dashboard (Bottom Tabs) */}
+        <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
