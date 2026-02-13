@@ -168,7 +168,7 @@ export default function KitchenScreen() {
           >
             <MaterialCommunityIcons name="arrow-left" size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.navTitle}>Dapur Soondobu</Text>
+          <Text style={styles.navTitle}>Pesanan</Text>
           <View style={{ width: 40 }} />
         </View>
 

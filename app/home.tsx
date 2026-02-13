@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios"; // Pastikan pakai axios
+import axios from "axios";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -21,108 +21,115 @@ import {
 export default function DashboardScreen() {
   const router = useRouter();
 
-  // --- STATE DASHBOARD ---
+  // --- STATE DATA ---
   const [storeName, setStoreName] = useState("Loading...");
   const [userName, setUserName] = useState("Kasir");
   const [summary, setSummary] = useState({ revenue: 0, transactions: 0 });
+  const [pendingOrders, setPendingOrders] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // --- STATE BUKA TOKO (SHIFT) ---
+  // --- STATE SHIFT/BUKA TOKO ---
   const [isStoreClosed, setIsStoreClosed] = useState(false);
   const [startCash, setStartCash] = useState("");
   const [isOpening, setIsOpening] = useState(false);
 
+  // Helper Format Rupiah
+  const formatRp = (num: number) => {
+    return "Rp " + (num || 0).toLocaleString("id-ID");
+  };
+
+  // Refresh data setiap kali layar difokuskan
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [])
+      const interval = setInterval(() => loadData(true), 10000);
+      return () => clearInterval(interval);
+    }, []),
   );
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const savedStoreName = await AsyncStorage.getItem("pos_store_name");
       const savedUserName = await AsyncStorage.getItem("pos_user_name");
       const slug = await AsyncStorage.getItem("pos_store_slug");
-      const apiUrl = await AsyncStorage.getItem("pos_api_url");
       const token = await AsyncStorage.getItem("pos_token");
+      const apiUrl = "https://pos.soondobu.com/api";
 
       if (savedStoreName) setStoreName(savedStoreName);
       if (savedUserName) setUserName(savedUserName);
 
-      if (slug && token && apiUrl) {
-        // 1. CEK STATUS TOKO (Apakah Shift Sudah Dibuka?)
-        try {
-          const statusRes = await axios.get(`${apiUrl}/pos/${slug}/status`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          // Jika toko tutup (is_open = false), munculkan Modal Buka Toko
-          if (!statusRes.data.is_open) {
-            setIsStoreClosed(true);
-            setLoading(false);
-            return; // Stop di sini, jangan load report dulu
-          } else {
-            setIsStoreClosed(false);
-          }
-        } catch (err) {
-          console.log(
-            "Gagal cek status toko (mungkin endpoint belum ada)",
-            err
-          );
-          // Lanjut saja jika endpoint belum siap (fallback)
-        }
-
-        // 2. Fetch Report Dashboard
-        const reportRes = await axios.get(`${apiUrl}/pos/${slug}/reports`, {
+      if (slug && token) {
+        // 1. CEK STATUS TOKO
+        const statusRes = await axios.get(`${apiUrl}/pos/${slug}/status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        setIsStoreClosed(!statusRes.data.is_open);
 
-        if (reportRes.data.success || reportRes.data.status === "success") {
-          const data = reportRes.data.data;
+        if (statusRes.data.is_open) {
+          // 2. AMBIL ANTRIAN DAPUR
+          const kitchenRes = await axios.get(`${apiUrl}/pos/${slug}/kitchen`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (kitchenRes.data && kitchenRes.data.data) {
+            setPendingOrders(kitchenRes.data.data.length);
+          }
+
+          // 3. AMBIL LAPORAN
+          const reportRes = await axios.get(`${apiUrl}/pos/${slug}/reports`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const reportData = reportRes.data.data;
           setSummary({
-            revenue: data.daily_revenue || 0,
-            transactions: data.total_orders_day || 0,
+            revenue: reportData?.daily_revenue || 0,
+            transactions: reportData?.total_orders_day || 0,
           });
         }
       }
     } catch (e) {
-      console.error("Gagal memuat data dashboard", e);
+      console.error("Gagal load dashboard:", e);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- FUNGSI BUKA TOKO ---
+  const handleLogout = async () => {
+    Alert.alert("Logout", "Apakah Anda yakin ingin keluar?", [
+      { text: "Batal", style: "cancel" },
+      {
+        text: "Keluar",
+        style: "destructive",
+        onPress: async () => {
+          await AsyncStorage.removeItem("pos_token");
+          await AsyncStorage.removeItem("pos_user_name");
+          router.replace("/");
+        },
+      },
+    ]);
+  };
+
   const handleOpenStore = async () => {
-    const cash = parseInt(startCash.replace(/\./g, "")); // Hapus titik format ribuan
-    if (isNaN(cash)) {
-      Alert.alert("Error", "Masukkan jumlah uang modal awal");
-      return;
-    }
+    const cash = parseInt(startCash.replace(/\./g, ""));
+    if (isNaN(cash)) return Alert.alert("Error", "Masukkan modal awal");
 
     setIsOpening(true);
     try {
       const slug = await AsyncStorage.getItem("pos_store_slug");
       const token = await AsyncStorage.getItem("pos_token");
-      const apiUrl = await AsyncStorage.getItem("pos_api_url");
-
       await axios.post(
-        `${apiUrl}/pos/${slug}/open-store`,
+        `https://pos.soondobu.com/api/pos/${slug}/open-store`,
         { start_cash: cash },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: `Bearer ${token}` } },
       );
-
-      Alert.alert("Berhasil", "Toko telah dibuka! Selamat bekerja.");
       setIsStoreClosed(false);
-      loadData(); // Reload data dashboard
+      loadData();
     } catch (error) {
-      Alert.alert("Gagal", "Tidak bisa membuka toko. Cek koneksi internet.");
+      Alert.alert("Gagal", "Terjadi kesalahan saat membuka toko.");
     } finally {
       setIsOpening(false);
     }
   };
 
-  // --- NAVIGASI MENU ---
   const menuItems = [
     {
       title: "Pesanan",
@@ -131,11 +138,10 @@ export default function DashboardScreen() {
       color: "#F59E0B",
       route: "/kitchen",
     },
-    // { title: 'Gudang', desc: 'Ambil Barang', icon: 'warehouse', color: '#8B5CF6', route: '/warehouse' },
     {
       title: "Invoice",
       desc: "Riwayat Transaksi",
-      icon: "receipt",
+      icon: "script-text-outline",
       color: "#10B981",
       route: "/orders",
     },
@@ -149,227 +155,179 @@ export default function DashboardScreen() {
     {
       title: "Closing",
       desc: "Laporan Akhir Shift",
-      icon: "file-document-outline",
+      icon: "file-lock",
       color: "#6366F1",
       route: "/closing",
     },
     {
       title: "Ganti Toko",
-      desc: "Scan QR Ulang",
+      desc: "Reset Pengaturan",
       icon: "store-cog",
       color: "#8B5CF6",
-      route: "change-store",
+      route: "/change-store",
     },
     {
       title: "Logout",
-      desc: "Ganti Karyawan",
+      desc: "Keluar Aplikasi",
       icon: "logout",
       color: "#EF4444",
       route: "logout",
     },
   ];
 
-  const handleMenuPress = async (route: string) => {
-    if (route === "change-store") {
-      Alert.alert(
-        "Ganti Toko",
-        "Anda yakin ingin keluar? Anda harus Scan QR Toko lagi untuk masuk.",
-        [
-          { text: "Batal", style: "cancel" },
-          {
-            text: "Ya, Ganti",
-            style: "destructive",
-            onPress: async () => {
-              await AsyncStorage.clear();
-              router.replace("/scan-setup");
-            },
-          },
-        ]
-      );
-    } else if (route === "logout") {
-      await AsyncStorage.removeItem("pos_token");
-      await AsyncStorage.removeItem("pos_user_name");
-      router.replace("/select-user");
-    } else {
-      router.push(route as any);
-    }
-  };
-
-  const formatRp = (num: number) => "Rp " + num.toLocaleString("id-ID");
+  if (loading && !summary.revenue && !pendingOrders) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#1E40AF" />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1E40AF" />
 
-      {/* --- HEADER DASHBOARD --- */}
       <LinearGradient colors={["#1E40AF", "#3B82F6"]} style={styles.header}>
-        <View style={styles.headerContent}>
+        <View style={styles.headerTop}>
           <View>
-            <Text style={styles.greeting}>Selamat Datang,</Text>
-            <Text style={styles.userText}>{userName}</Text>
+            <Text style={styles.greeting}>Halo,</Text>
+            <Text style={styles.userName}>{userName}</Text>
           </View>
           <View style={styles.storeBadge}>
-            <MaterialCommunityIcons name="store" size={16} color="#2563EB" />
+            <MaterialCommunityIcons name="store" size={14} color="#1E40AF" />
             <Text style={styles.storeText}>{storeName}</Text>
           </View>
         </View>
 
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Penjualan Hari Ini</Text>
-          {loading ? (
-            <ActivityIndicator size="small" color="#2563EB" />
-          ) : (
-            <>
-              <Text style={styles.summaryValue}>
-                {formatRp(summary.revenue)}
+        <View style={styles.cardSummary}>
+          <Text style={styles.summaryLabel}>Penjualan Hari Ini</Text>
+          <Text style={styles.revenueText}>{formatRp(summary.revenue)}</Text>
+          <View style={styles.summaryRow}>
+            <View style={styles.badgeGreen}>
+              <Text style={styles.badgeTextGreen}>
+                {summary.transactions} Transaksi
               </Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summarySub}>
-                  {summary.transactions} Transaksi
-                </Text>
-                <Text style={styles.summarySub}>•</Text>
-                <Text style={styles.summarySub}>Aktif</Text>
-              </View>
-            </>
-          )}
+            </View>
+            <View style={styles.badgeBlue}>
+              <Text style={styles.badgeTextBlue}>Aktif</Text>
+            </View>
+          </View>
         </View>
       </LinearGradient>
 
-      {/* --- MENU GRID --- */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.menuScroll}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.sectionTitle}>Menu Utama</Text>
 
-        <View style={styles.grid}>
-          <TouchableOpacity
-            style={styles.bigButton}
-            activeOpacity={0.9}
-            onPress={() => router.push("/pos")}
+        <TouchableOpacity
+          style={styles.posButton}
+          onPress={() => router.push("/pos")}
+        >
+          <LinearGradient
+            colors={["#2563EB", "#60A5FA"]}
+            style={styles.posGradient}
           >
-            <LinearGradient
-              colors={["#2563EB", "#60A5FA"]}
-              style={styles.bigButtonGradient}
-            >
-              <View style={styles.bigIconCircle}>
-                <MaterialCommunityIcons
-                  name="monitor-dashboard"
-                  size={32}
-                  color="#2563EB"
-                />
-              </View>
-              <View>
-                <Text style={styles.bigButtonTitle}>Buka Kasir</Text>
-                <Text style={styles.bigButtonDesc}>Buat Pesanan Baru</Text>
-              </View>
+            <View style={styles.posIconCircle}>
               <MaterialCommunityIcons
-                name="arrow-right"
-                size={24}
-                color="white"
-                style={{ marginLeft: "auto" }}
-              />
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {menuItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.menuItem}
-              activeOpacity={0.7}
-              onPress={() => handleMenuPress(item.route)}
-            >
-              <View
-                style={[styles.iconBox, { backgroundColor: item.color + "15" }]}
-              >
-                <MaterialCommunityIcons
-                  name={item.icon as any}
-                  size={28}
-                  color={item.color}
-                />
-              </View>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-              <Text style={styles.menuDesc}>{item.desc}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
-
-      {/* --- MODAL BUKA TOKO (JIKA TUTUP) --- */}
-      <Modal visible={isStoreClosed} animationType="slide" transparent={false}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <View style={styles.iconCircle}>
-              <MaterialCommunityIcons
-                name="store-clock-outline"
-                size={50}
+                name="monitor-dashboard"
+                size={28}
                 color="#2563EB"
               />
             </View>
-
-            <Text style={styles.modalTitle}>Buka Toko 🏪</Text>
-            <Text style={styles.modalDesc}>
-              Toko saat ini statusnya{" "}
-              <Text style={{ fontWeight: "bold", color: "#EF4444" }}>
-                TUTUP
-              </Text>
-              .{"\n"}Masukkan modal awal di laci (Petty Cash) untuk memulai
-              shift.
-            </Text>
-
-            <View style={styles.inputWrapper}>
-              <Text style={styles.prefix}>Rp</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                keyboardType="number-pad"
-                value={startCash}
-                onChangeText={(text) => {
-                  const num = text.replace(/\D/g, "");
-                  setStartCash(Number(num).toLocaleString("id-ID"));
-                }}
-              />
+            <View>
+              <Text style={styles.posTitle}>Buka Kasir</Text>
+              <Text style={styles.posSub}>Buat pesanan baru</Text>
             </View>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={24}
+              color="white"
+              style={{ marginLeft: "auto" }}
+            />
+          </LinearGradient>
+        </TouchableOpacity>
 
-            <View style={styles.quickRow}>
-              <TouchableOpacity
-                onPress={() => setStartCash("100.000")}
-                style={styles.quickBtn}
-              >
-                <Text style={styles.quickText}>100k</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setStartCash("200.000")}
-                style={styles.quickBtn}
-              >
-                <Text style={styles.quickText}>200k</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setStartCash("500.000")}
-                style={styles.quickBtn}
-              >
-                <Text style={styles.quickText}>500k</Text>
-              </TouchableOpacity>
-            </View>
-
+        <View style={styles.menuGrid}>
+          {menuItems.map((item, index) => (
             <TouchableOpacity
-              style={[styles.openBtn, isOpening && { opacity: 0.7 }]}
+              key={index}
+              style={styles.menuBox}
+              onPress={() => {
+                if (item.route === "logout") handleLogout();
+                else if (item.route === "/change-store") {
+                  Alert.alert(
+                    "Hapus Data",
+                    "Ini akan mereset koneksi toko. Lanjut?",
+                    [
+                      { text: "Batal" },
+                      {
+                        text: "Ya",
+                        onPress: async () => {
+                          await AsyncStorage.clear();
+                          router.replace("/");
+                        },
+                      },
+                    ],
+                  );
+                } else router.push(item.route as any);
+              }}
+            >
+              <View
+                style={[
+                  styles.iconContainer,
+                  { backgroundColor: item.color + "15" },
+                ]}
+              >
+                <MaterialCommunityIcons
+                  name={item.icon as any}
+                  size={26}
+                  color={item.color}
+                />
+                {item.title === "Pesanan" && pendingOrders > 0 && (
+                  <View style={styles.notifBadge}>
+                    <Text style={styles.notifText}>{pendingOrders}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.menuLabel}>{item.title}</Text>
+              <Text style={styles.menuSubLabel}>{item.desc}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+
+      <Modal visible={isStoreClosed} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <MaterialCommunityIcons
+              name="store-clock-outline"
+              size={60}
+              color="#2563EB"
+            />
+            <Text style={styles.modalTitle}>Toko Masih Tutup</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Modal Awal (Rp)"
+              keyboardType="numeric"
+              value={startCash}
+              onChangeText={(t) =>
+                setStartCash(
+                  Number(t.replace(/\D/g, "")).toLocaleString("id-ID"),
+                )
+              }
+            />
+            <TouchableOpacity
+              style={styles.btnOpen}
               onPress={handleOpenStore}
               disabled={isOpening}
             >
               {isOpening ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text style={styles.openBtnText}>BUKA TOKO SEKARANG</Text>
+                <Text style={styles.btnOpenText}>BUKA TOKO</Text>
               )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => router.replace("/select-user")}
-              style={{ marginTop: 20 }}
-            >
-              <Text style={{ color: "#6B7280" }}>
-                Bukan {userName}? Ganti Akun
-              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -379,215 +337,167 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F3F4F6" },
-
-  // HEADER
+  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: {
-    padding: 24,
-    paddingTop: 50,
+    height: 200,
+    padding: 20,
+    paddingTop: 40,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    height: 220,
-    marginBottom: 60,
+    marginBottom: 50,
   },
-  headerContent: {
+  headerTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 20,
+    alignItems: "center",
   },
-  greeting: { color: "#BFDBFE", fontSize: 14, marginBottom: 2 },
-  userText: { color: "white", fontSize: 20, fontWeight: "bold" },
+  greeting: { color: "#DBEAFE", fontSize: 14 },
+  userName: { color: "white", fontSize: 20, fontWeight: "bold" },
   storeBadge: {
     flexDirection: "row",
-    backgroundColor: "white",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
     alignItems: "center",
-    gap: 6,
+    backgroundColor: "white",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    gap: 5,
   },
-  storeText: { color: "#2563EB", fontWeight: "bold", fontSize: 12 },
-
-  // SUMMARY CARD
-  summaryCard: {
+  storeText: { color: "#1E40AF", fontWeight: "bold", fontSize: 12 },
+  cardSummary: {
     backgroundColor: "white",
     borderRadius: 20,
     padding: 20,
-    elevation: 5,
     position: "absolute",
-    bottom: -50,
+    bottom: -40,
     left: 20,
     right: 20,
+    elevation: 4,
   },
-  summaryTitle: {
-    color: "#6B7280",
-    fontSize: 14,
-    marginBottom: 4,
-    fontWeight: "500",
+  summaryLabel: { color: "#64748B", fontSize: 12, fontWeight: "600" },
+  revenueText: {
+    color: "#1E293B",
+    fontSize: 28,
+    fontWeight: "bold",
+    marginVertical: 4,
   },
-  summaryValue: { color: "#111827", fontSize: 32, fontWeight: "bold" },
-  summaryRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
-    alignItems: "center",
-  },
-  summarySub: {
-    color: "#10B981",
-    fontWeight: "600",
-    fontSize: 13,
-    backgroundColor: "#ECFDF5",
+  summaryRow: { flexDirection: "row", gap: 10, marginTop: 5 },
+  badgeGreen: {
+    backgroundColor: "#DCFCE7",
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 5,
   },
-
-  // CONTENT
-  content: { padding: 20, paddingTop: 10 },
+  badgeTextGreen: { color: "#166534", fontSize: 11, fontWeight: "700" },
+  badgeBlue: {
+    backgroundColor: "#DBEAFE",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  badgeTextBlue: { color: "#1E40AF", fontSize: 11, fontWeight: "700" },
+  menuScroll: { paddingHorizontal: 20 },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 16,
+    color: "#334155",
+    marginBottom: 15,
   },
-  grid: {
+  posButton: {
+    marginBottom: 15,
+    borderRadius: 15,
+    overflow: "hidden",
+    elevation: 2,
+  },
+  posGradient: {
+    padding: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 15,
+  },
+  posIconCircle: {
+    width: 45,
+    height: 45,
+    backgroundColor: "white",
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  posTitle: { color: "white", fontSize: 16, fontWeight: "bold" },
+  posSub: { color: "#DBEAFE", fontSize: 12 },
+  menuGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 12,
   },
-
-  // BUTTONS
-  bigButton: {
-    width: "100%",
-    marginBottom: 8,
-    borderRadius: 20,
-    overflow: "hidden",
-    elevation: 4,
-  },
-  bigButtonGradient: {
-    padding: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  bigIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "white",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bigButtonTitle: { color: "white", fontSize: 18, fontWeight: "bold" },
-  bigButtonDesc: { color: "#DBEAFE", fontSize: 13 },
-  menuItem: {
+  menuBox: {
     width: "48%",
     backgroundColor: "white",
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 4,
+    padding: 15,
+    borderRadius: 15,
+    marginBottom: 15,
     elevation: 1,
     borderWidth: 1,
-    borderColor: "#F3F4F6",
+    borderColor: "#F1F5F9",
   },
-  iconBox: {
-    width: 48,
-    height: 48,
+  iconContainer: {
+    width: 45,
+    height: 45,
     borderRadius: 12,
-    marginBottom: 12,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 10,
   },
-  menuTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#374151",
-    marginBottom: 2,
+  menuLabel: { fontSize: 14, fontWeight: "bold", color: "#334155" },
+  menuSubLabel: { fontSize: 10, color: "#94A3B8", marginTop: 2 },
+  notifBadge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+    backgroundColor: "#EF4444",
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "white",
   },
-  menuDesc: { fontSize: 11, color: "#9CA3AF" },
-
-  // MODAL STYLES
-  modalContainer: {
+  notifText: { color: "white", fontSize: 10, fontWeight: "bold" },
+  modalOverlay: {
     flex: 1,
-    backgroundColor: "#F3F4F6",
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     padding: 20,
   },
-  modalContent: {
+  modalBox: {
     backgroundColor: "white",
-    borderRadius: 24,
+    borderRadius: 25,
     padding: 30,
     alignItems: "center",
-    elevation: 5,
-  },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#1F2937",
-    marginBottom: 10,
-  },
-  modalDesc: {
-    textAlign: "center",
-    color: "#6B7280",
-    marginBottom: 30,
-    lineHeight: 22,
-  },
-
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    height: 60,
-    width: "100%",
-    marginBottom: 15,
-  },
-  prefix: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#9CA3AF",
-    marginRight: 10,
+    marginTop: 15,
+    marginBottom: 10,
   },
-  input: { flex: 1, fontSize: 24, fontWeight: "bold", color: "#1F2937" },
-
-  quickRow: { flexDirection: "row", gap: 10, marginBottom: 30, width: "100%" },
-  quickBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    backgroundColor: "white",
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
-    alignItems: "center",
+  modalInput: {
+    width: "100%",
+    backgroundColor: "#F1F5F9",
+    padding: 15,
+    borderRadius: 10,
+    fontSize: 18,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: 15,
   },
-  quickText: { fontWeight: "600", color: "#4B5563" },
-
-  openBtn: {
+  btnOpen: {
     backgroundColor: "#2563EB",
     width: "100%",
-    paddingVertical: 16,
-    borderRadius: 12,
+    padding: 15,
+    borderRadius: 10,
     alignItems: "center",
-    elevation: 3,
   },
-  openBtnText: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16,
-    letterSpacing: 1,
-  },
+  btnOpenText: { color: "white", fontWeight: "bold" },
 });

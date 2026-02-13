@@ -4,6 +4,8 @@ import axios from "axios";
 import * as Print from "expo-print";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +29,7 @@ interface CartItem {
 
 export default function PaymentScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // --- STATE ---
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -56,7 +59,7 @@ export default function PaymentScreen() {
         setCart(parsedCart);
         const total = parsedCart.reduce(
           (acc: number, item: CartItem) => acc + item.price * item.qty,
-          0
+          0,
         );
         setTotalAmount(total);
       } else {
@@ -109,7 +112,7 @@ export default function PaymentScreen() {
                     item.price * item.qty
                   ).toLocaleString()}</td>
                 </tr>
-              `
+              `,
                 )
                 .join("")}
             </table>
@@ -183,7 +186,7 @@ export default function PaymentScreen() {
             Accept: "application/json", // <--- WAJIB BUAT LARAVEL
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       console.log("SUKSES:", response.data);
@@ -215,13 +218,13 @@ export default function PaymentScreen() {
         } else {
           Alert.alert(
             "Gagal",
-            error.response.data?.message || "Terjadi kesalahan server."
+            error.response.data?.message || "Terjadi kesalahan server.",
           );
         }
       } else if (error.request) {
         Alert.alert(
           "Koneksi Error",
-          "Tidak bisa menghubungi server. Cek internet/IP Address."
+          "Tidak bisa menghubungi server. Cek internet/IP Address.",
         );
       } else {
         Alert.alert("Error", "Terjadi kesalahan aplikasi.");
@@ -255,7 +258,13 @@ export default function PaymentScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            // 🔑 FIX UTAMA: ruang aman biar changeBox gak ketutup
+            paddingBottom: 180 + insets.bottom,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* RINGKASAN PESANAN */}
@@ -399,7 +408,7 @@ export default function PaymentScreen() {
       </ScrollView>
 
       {/* Tombol Bayar Statis di Bawah */}
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 20 + insets.bottom }]}>
         <TouchableOpacity
           style={[
             styles.payButton,

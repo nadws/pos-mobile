@@ -3,8 +3,8 @@
     "name": "Uwais POS",
     "slug": "pos-mobile",
     "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "orientation": "default",
+    "icon": "./assets/images/favicon1.png",
     "scheme": "posmobile",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -33,9 +33,9 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-new.png",
-          "imageWidth": 200,
+          "imageWidth": 300,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#1E40AF",
           "dark": {
             "backgroundColor": "#000000"
           }
@@ -52,9 +52,7 @@
         "projectId": "0f2dc23a-8f38-4d4e-b916-5c6d9715279a"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/0f2dc23a-8f38-4d4e-b916-5c6d9715279a",
       "enabled": true,
