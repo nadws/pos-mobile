@@ -32,7 +32,7 @@ export default function SelectUser() {
   const loadData = async () => {
     const slug = await AsyncStorage.getItem("pos_store_slug");
     const name = await AsyncStorage.getItem("pos_store_name");
-    const apiUrl = await AsyncStorage.getItem("pos_api_url");
+    const apiUrl = "https://uwaispos.online/api";
 
     if (name) setStoreName(name);
 

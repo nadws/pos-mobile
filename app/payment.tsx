@@ -147,9 +147,7 @@ export default function PaymentScreen() {
       const token = await AsyncStorage.getItem("pos_token");
       // Ambil URL API yang tersimpan saat Login (Biar sinkron sama index.tsx)
       // Default fallback ke domain live kalau null
-      const baseUrl =
-        (await AsyncStorage.getItem("pos_api_url")) ||
-        "https://pos.soondobu.com/api";
+      const baseUrl = "https://uwaispos.online/api";
 
       // Cek Debugging di Console (Lihat terminal Metro Bundler)
       console.log("DEBUG TRANSAKSI:");

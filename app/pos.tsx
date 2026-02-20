@@ -67,7 +67,7 @@ export default function PosScreen() {
       }
 
       const response = await axios.get(
-        `https://pos.soondobu.com/api/pos/${slug}/menu`,
+        `https://uwaispos.online/api/pos/${slug}/menu`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
@@ -148,7 +148,7 @@ export default function PosScreen() {
     const getImageUrl = (img?: string) => {
       if (!img) return null;
       if (img.startsWith("http")) return img;
-      return `https://pos.soondobu.com/storage/${img}`;
+      return `https://uwaispos.online/storage/${img}`;
     };
     const imageUrl = getImageUrl(item.image);
 

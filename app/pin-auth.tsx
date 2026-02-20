@@ -42,7 +42,7 @@ export default function PinAuthScreen() {
 
   const handleVerifyPin = async () => {
     setLoading(true);
-    const apiUrl = await AsyncStorage.getItem("pos_api_url");
+    const apiUrl = "https://uwaispos.online/api";
 
     try {
       const response = await axios.post(`${apiUrl}/pos/verify-pin`, {

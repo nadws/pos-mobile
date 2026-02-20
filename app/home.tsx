@@ -54,7 +54,7 @@ export default function DashboardScreen() {
       const savedUserName = await AsyncStorage.getItem("pos_user_name");
       const slug = await AsyncStorage.getItem("pos_store_slug");
       const token = await AsyncStorage.getItem("pos_token");
-      const apiUrl = "https://pos.soondobu.com/api";
+      const apiUrl = "https://uwaispos.online/api";
 
       if (savedStoreName) setStoreName(savedStoreName);
       if (savedUserName) setUserName(savedUserName);
@@ -117,7 +117,7 @@ export default function DashboardScreen() {
       const slug = await AsyncStorage.getItem("pos_store_slug");
       const token = await AsyncStorage.getItem("pos_token");
       await axios.post(
-        `https://pos.soondobu.com/api/pos/${slug}/open-store`,
+        `https://uwaispos.online/api/pos/${slug}/open-store`,
         { start_cash: cash },
         { headers: { Authorization: `Bearer ${token}` } },
       );

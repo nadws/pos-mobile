@@ -32,7 +32,7 @@ export default function ClosingScreen() {
     try {
       const slug = await AsyncStorage.getItem("pos_store_slug");
       const token = await AsyncStorage.getItem("pos_token");
-      const apiUrl = await AsyncStorage.getItem("pos_api_url");
+      const apiUrl = "https://uwaispos.online/api";
 
       const statusRes = await axios.get(`${apiUrl}/pos/${slug}/status`, {
         headers: { Authorization: `Bearer ${token}` },

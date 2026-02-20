@@ -74,7 +74,7 @@ export default function KitchenScreen() {
       if (!slug || !token) return;
 
       const response = await axios.get(
-        `https://pos.soondobu.com/api/pos/${slug}/kitchen`,
+        `https://uwaispos.online/api/pos/${slug}/kitchen`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
 
